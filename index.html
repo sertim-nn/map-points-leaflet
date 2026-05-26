@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
@@ -1151,6 +1152,46 @@
 
         body.resizing { cursor: col-resize !important; user-select: none; }
         body.resizing * { cursor: col-resize !important; }
+
+        /* Changed zone styles */
+        .zone-card.changed {
+            border-color: #f59e0b !important;
+            background: linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(251,191,36,0.12) 100%) !important;
+            box-shadow: 0 0 0 2px rgba(245,158,11,0.3), 0 2px 8px rgba(0,0,0,0.04) !important;
+        }
+        .zone-changed-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            padding: 2px 7px;
+            border-radius: 8px;
+            font-size: 9px;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .share-url-box {
+            background: var(--pastel-bg);
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            margin-top: 6px;
+            word-break: break-all;
+            font-size: 9px;
+            color: var(--text-muted);
+            font-family: monospace;
+            line-height: 1.4;
+            cursor: pointer;
+        }
+        .share-url-box:hover { background: #eef1f6; }
+        body.theme-dark .share-url-box { background: rgba(26,26,46,0.8); }
+        @keyframes pulseOrange {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.4); }
+            50% { box-shadow: 0 0 0 6px rgba(245,158,11,0); }
+        }
+        .zone-card.changed { animation: pulseOrange 2s 3; }
     </style>
 </head>
 <body>
@@ -1308,6 +1349,29 @@
                     <div id="zoneStatus" style="min-height: 0; margin-bottom: 8px;"></div>
 
                     <div id="deliveryZonesContainer"></div>
+
+                    <!-- Zone Schedule Update -->
+                    <div class="section-header" style="margin-top: 16px;">
+                        <div class="section-title">
+                            <i class="fas fa-calendar-alt" style="color: var(--pastel-peach);"></i>
+                            <span>Обновление расписания</span>
+                        </div>
+                        <span class="badge">.xlsx/.xls</span>
+                    </div>
+                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 8px; line-height: 1.4;">Загрузите Excel с новыми днями отгрузки. Зоны, где дни изменились, будут подсвечены оранжевым.</p>
+                    <input id="scheduleFileInput" type="file" accept=".xlsx,.xls" style="display: none;" />
+                    <div id="scheduleDropZone" class="drop-zone-mini" style="margin-bottom: 8px; padding: 10px; border-color: var(--pastel-peach); background: linear-gradient(135deg, rgba(240,213,192,0.1) 0%, rgba(232,184,154,0.1) 100%);">
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fas fa-calendar-check" style="font-size: 14px; color: var(--pastel-peach);"></i>
+                            <span style="font-size: 10px; color: var(--text-secondary);">Перетащите Excel с расписанием</span>
+                        </div>
+                    </div>
+                    <div class="actions-row" style="margin-bottom: 8px;">
+                        <button id="btnScheduleChoose" class="btn btn-help"><i class="fas fa-folder-open"></i><span>Выбрать</span></button>
+                        <button id="btnScheduleTemplate" class="btn btn-secondary"><i class="fas fa-download"></i><span>Шаблон</span></button>
+                    </div>
+                    <div id="scheduleStatus" style="min-height: 0; margin-bottom: 8px;"></div>
+                    <div id="changesStats" style="display: none; margin-bottom: 8px;"></div>
                 </div>
             </div>
 
@@ -1357,6 +1421,22 @@
                             <span class="theme-btn-label">Корпоратив</span>
                         </button>
                     </div>
+
+                    <!-- Share Link -->
+                    <div class="section-header" style="margin-top: 16px;">
+                        <div class="section-title">
+                            <i class="fas fa-share-nodes" style="color: var(--pastel-mint-dark);"></i>
+                            <span>Поделиться картой</span>
+                        </div>
+                    </div>
+                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4;">Сформируйте ссылку с зонами и изменениями расписания. Откроется в любом браузере без установки.</p>
+                    <button class="btn btn-success" style="width: 100%; margin-bottom: 6px;" onclick="generateShareLink()">
+                        <i class="fas fa-link"></i><span>Скопировать ссылку</span>
+                    </button>
+                    <div id="shareUrlContainer" style="display: none;">
+                        <div class="share-url-box" id="shareUrlPreview" onclick="copyShareUrl()" title="Нажмите чтобы скопировать"></div>
+                    </div>
+                    <div id="shareStatus" style="min-height: 0; margin-top: 6px; margin-bottom: 8px;"></div>
 
                     <!-- Help -->
                     <div class="section-header" style="margin-top: 16px;">
@@ -1460,7 +1540,14 @@
                 </ul>
 
                 <h3><i class="fas fa-truck" style="color: var(--pastel-gray-dark); margin-right: 6px;"></i>4. Зоны доставки</h3>
-                <p>Загружайте зоны из TXT или JSON (GeoJSON) на вкладке <strong>«Импорт»</strong>.</p>
+                <p>Загружайте зоны из TXT или JSON на вкладке <strong>«Импорт»</strong>. Затем используйте раздел <strong>«Обновление расписания»</strong> для загрузки Excel с изменениями.</p>
+                <ul>
+                    <li><strong>Дни доставки</strong> — текущие дни (Пн,Ср,Пт)</li>
+                    <li><strong>Цикл</strong> — чет / нечет (или пусто = каждую неделю)</li>
+                    <li><strong>Дни доставки new</strong> — новые дни (если изменились)</li>
+                    <li><strong>Цикл new</strong> — новая цикличность</li>
+                    <li><strong>Цвет</strong> — HEX-цвет подсветки (#f59e0b)</li>
+                </ul>
 
                 <h3><i class="fas fa-database" style="color: var(--pastel-purple); margin-right: 6px;"></i>5. Бекап данных</h3>
                 <p>На вкладке <strong>«Ещё»</strong>:</p>
@@ -1504,6 +1591,9 @@
         var isResizing = false;
         var sidebarWidth = 280;
         var currentTab = 'map';
+
+        var newZoneSchedules = {}; // zoneName -> { currentDays: Set, currentCycle, deliveryDays: Set, deliveryCycle, changeColor }
+        var currentShareUrl = '';
 
         var colorPalette = ['#a8c5e2', '#c9b8e0', '#b5d8cc', '#e8c4c4', '#f0d5c0', '#c4dce8', '#d4c4e8', '#bfd8bf', '#e0c4d4', '#c4d4e8'];
 
@@ -2502,13 +2592,9 @@
             zones.forEach(function(zone) {
                 var zoneId = 'zone_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 var polygon = L.polygon(zone.coordinates, { color: '#6b7280', fillColor: '#9ca3af', fillOpacity: 0.2, weight: 2 }).addTo(map);
-                var popupHtml = '<div class="popup-content"><div class="popup-title">' + zone.name + '</div>';
-                if (zone.deliveryOrderDays) popupHtml += formatDaysSchedule(zone.deliveryOrderDays, 'Доставка');
-                if (zone.takeOrderDays) popupHtml += formatDaysSchedule(zone.takeOrderDays, 'Приём заказов');
-                popupHtml += '</div>';
-                polygon.bindPopup(popupHtml);
-
-                deliveryZones.push({ id: zoneId, name: zone.name, coordinates: zone.coordinates, polygon: polygon, visible: true, takeOrderDays: zone.takeOrderDays, deliveryOrderDays: zone.deliveryOrderDays });
+                var zoneObj = { id: zoneId, name: zone.name, coordinates: zone.coordinates, polygon: polygon, visible: true, takeOrderDays: zone.takeOrderDays, deliveryOrderDays: zone.deliveryOrderDays };
+                rebindZonePopup(zoneObj);
+                deliveryZones.push(zoneObj);
                 zoneVisibility[zoneId] = true;
             });
 
@@ -2570,10 +2656,14 @@
             container.innerHTML = '';
             deliveryZones.forEach(function(zone) {
                 var div = document.createElement('div');
-                div.className = 'zone-card' + (zone.visible ? ' active' : '');
+                div.className = 'zone-card' + (zone.visible ? ' active' : '') + (zone.hasChanges ? ' changed' : '');
                 div.id = 'zone-card-' + zone.id;
 
-                div.innerHTML = '<div style="display: flex; align-items: center; gap: 8px;"><div class="ios-checkbox"><input type="checkbox" ' + (zone.visible ? 'checked' : '') + ' data-zone-id="' + zone.id + '"><span class="checkmark"></span></div><div style="width: 22px; height: 22px; background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%); border-radius: 4px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-draw-polygon" style="color: white; font-size: 9px;"></i></div><div style="flex: 1; min-width: 0;"><div class="group-name" title="' + zone.name.replace(/"/g, '&quot;') + '">' + zone.name + '</div></div><div style="display: flex; gap: 4px;"><button class="zone-btn" onclick="centerOnZone(\'' + zone.id + '\')" title="Центрировать"><i class="fas fa-crosshairs"></i></button><button class="zone-btn danger" onclick="deleteZone(\'' + zone.id + '\')" title="Удалить"><i class="fas fa-trash"></i></button></div></div>';
+                var chC = zone.changeColor || '#f59e0b';
+                var chCD = zone.hasChanges ? shadeColor(chC, -15) : '';
+                var changedBadge = zone.hasChanges ? '<span class="zone-changed-badge" style="background:linear-gradient(135deg,' + chC + ',' + chCD + ')"><i class="fas fa-exclamation"></i> изменено</span>' : '';
+                var iconBg = zone.hasChanges ? 'linear-gradient(135deg,' + chC + ',' + chCD + ')' : 'linear-gradient(135deg,#9ca3af,#6b7280)';
+                div.innerHTML = '<div style="display: flex; align-items: center; gap: 8px;"><div class="ios-checkbox"><input type="checkbox" ' + (zone.visible ? 'checked' : '') + ' data-zone-id="' + zone.id + '"><span class="checkmark"></span></div><div style="width: 22px; height: 22px; background: ' + iconBg + '; border-radius: 4px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-draw-polygon" style="color: white; font-size: 9px;"></i></div><div style="flex: 1; min-width: 0;"><div class="group-name" title="' + zone.name.replace(/"/g, '&quot;') + '">' + zone.name + '</div></div>' + changedBadge + '<div style="display: flex; gap: 4px;"><button class="zone-btn" onclick="centerOnZone(\'' + zone.id + '\')" title="Центрировать"><i class="fas fa-crosshairs"></i></button><button class="zone-btn danger" onclick="deleteZone(\'' + zone.id + '\')" title="Удалить"><i class="fas fa-trash"></i></button></div></div>';
 
                 div.querySelector('input[type="checkbox"]').addEventListener('change', function(e) { toggleZone(zone.id, e.target.checked); });
                 container.appendChild(div);
@@ -2635,7 +2725,17 @@
                         return { id: list.id, name: list.name, points: list.points, polygons: list.polygons ? list.polygons.map(function(poly) { return poly.map(function(p) { return { lat: p.lat, lng: p.lng }; }); }) : [] };
                     }),
                     deliveryZones: deliveryZones.map(function(zone) {
-                        return { id: zone.id, name: zone.name, coordinates: zone.coordinates, visible: zone.visible, takeOrderDays: zone.takeOrderDays, deliveryOrderDays: zone.deliveryOrderDays };
+                        return { id: zone.id, name: zone.name, coordinates: zone.coordinates, visible: zone.visible,
+                            takeOrderDays: zone.takeOrderDays, deliveryOrderDays: zone.deliveryOrderDays,
+                            newSchedule: zone.newSchedule ? {
+                                currentDays: Array.from(zone.newSchedule.currentDays || new Set()),
+                                currentCycle: zone.newSchedule.currentCycle || '',
+                                deliveryDays: zone.newSchedule.deliveryDays ? Array.from(zone.newSchedule.deliveryDays) : null,
+                                deliveryCycle: zone.newSchedule.deliveryCycle || '',
+                                changeColor: zone.newSchedule.changeColor || '#f59e0b'
+                            } : null,
+                            changeColor: zone.changeColor || '', currentCycle: zone.currentCycle || '', newDeliveryCycle: zone.newDeliveryCycle || '',
+                            hasChanges: zone.hasChanges || false, deliveryChanged: zone.deliveryChanged || false, cycleChanged: zone.cycleChanged || false };
                     }),
                     zoneVisibility: zoneVisibility
                 };
@@ -2660,17 +2760,35 @@
 
                 if (data.deliveryZones && data.deliveryZones.length > 0) {
                     data.deliveryZones.forEach(function(zone) {
-                        var polygon = L.polygon(zone.coordinates, { color: '#6b7280', fillColor: '#9ca3af', fillOpacity: 0.2, weight: 2 });
-                        var popupHtml = '<div class="popup-content"><div class="popup-title">' + zone.name + '</div>';
-                        if (zone.deliveryOrderDays) popupHtml += formatDaysSchedule(zone.deliveryOrderDays, 'Доставка');
-                        if (zone.takeOrderDays) popupHtml += formatDaysSchedule(zone.takeOrderDays, 'Приём заказов');
-                        popupHtml += '</div>';
-                        polygon.bindPopup(popupHtml);
+                        var hasChg = zone.hasChanges || false;
+                        var chC = zone.changeColor || '#f59e0b';
+                        var polygon = L.polygon(zone.coordinates, {
+                            color: hasChg ? chC : '#6b7280', fillColor: hasChg ? chC : '#9ca3af',
+                            fillOpacity: hasChg ? 0.28 : 0.2, weight: hasChg ? 3 : 2
+                        });
+                        var ns = null;
+                        if (zone.newSchedule) {
+                            ns = {
+                                currentDays: new Set(zone.newSchedule.currentDays || []),
+                                currentCycle: zone.newSchedule.currentCycle || '',
+                                deliveryDays: zone.newSchedule.deliveryDays ? new Set(zone.newSchedule.deliveryDays) : null,
+                                deliveryCycle: zone.newSchedule.deliveryCycle || '',
+                                changeColor: zone.newSchedule.changeColor || '#f59e0b'
+                            };
+                            newZoneSchedules[zone.name] = ns;
+                        }
+                        var zoneObj = { id: zone.id, name: zone.name, coordinates: zone.coordinates, polygon: polygon,
+                            visible: zone.visible, takeOrderDays: zone.takeOrderDays, deliveryOrderDays: zone.deliveryOrderDays,
+                            newSchedule: ns, changeColor: zone.changeColor || '', currentCycle: zone.currentCycle || '', newDeliveryCycle: zone.newDeliveryCycle || '',
+                            hasChanges: hasChg, deliveryChanged: zone.deliveryChanged, cycleChanged: zone.cycleChanged };
+                        rebindZonePopup(zoneObj);
                         if (zone.visible) polygon.addTo(map);
-                        deliveryZones.push({ id: zone.id, name: zone.name, coordinates: zone.coordinates, polygon: polygon, visible: zone.visible, takeOrderDays: zone.takeOrderDays, deliveryOrderDays: zone.deliveryOrderDays });
+                        deliveryZones.push(zoneObj);
                         zoneVisibility[zone.id] = zone.visible;
                     });
                     renderDeliveryZones();
+                    var changedCount = deliveryZones.filter(function(z) { return z.hasChanges; }).length;
+                    if (changedCount > 0) updateChangesStats(changedCount);
                 }
 
                 if (data.customLists && data.customLists.length > 0) {
@@ -2740,14 +2858,30 @@
 
                     if (data.deliveryZones && data.deliveryZones.length > 0) {
                         data.deliveryZones.forEach(function(zone) {
-                            var polygon = L.polygon(zone.coordinates, { color: '#6b7280', fillColor: '#9ca3af', fillOpacity: 0.2, weight: 2 });
-                            var popupHtml = '<div class="popup-content"><div class="popup-title">' + zone.name + '</div>';
-                            if (zone.deliveryOrderDays) popupHtml += formatDaysSchedule(zone.deliveryOrderDays, 'Доставка');
-                            if (zone.takeOrderDays) popupHtml += formatDaysSchedule(zone.takeOrderDays, 'Приём заказов');
-                            popupHtml += '</div>';
-                            polygon.bindPopup(popupHtml);
+                            var hasChg = zone.hasChanges || false;
+                            var chC = zone.changeColor || '#f59e0b';
+                            var polygon = L.polygon(zone.coordinates, {
+                                color: hasChg ? chC : '#6b7280', fillColor: hasChg ? chC : '#9ca3af',
+                                fillOpacity: hasChg ? 0.28 : 0.2, weight: hasChg ? 3 : 2
+                            });
+                            var ns = null;
+                            if (zone.newSchedule) {
+                                ns = {
+                                    currentDays: new Set(zone.newSchedule.currentDays || []),
+                                    currentCycle: zone.newSchedule.currentCycle || '',
+                                    deliveryDays: zone.newSchedule.deliveryDays ? new Set(zone.newSchedule.deliveryDays) : null,
+                                    deliveryCycle: zone.newSchedule.deliveryCycle || '',
+                                    changeColor: zone.newSchedule.changeColor || '#f59e0b'
+                                };
+                                newZoneSchedules[zone.name] = ns;
+                            }
+                            var zoneObj = { id: zone.id, name: zone.name, coordinates: zone.coordinates, polygon: polygon,
+                                visible: zone.visible, takeOrderDays: zone.takeOrderDays, deliveryOrderDays: zone.deliveryOrderDays,
+                                newSchedule: ns, changeColor: zone.changeColor || '', currentCycle: zone.currentCycle || '', newDeliveryCycle: zone.newDeliveryCycle || '',
+                                hasChanges: hasChg, deliveryChanged: zone.deliveryChanged, cycleChanged: zone.cycleChanged };
+                            rebindZonePopup(zoneObj);
                             if (zone.visible) polygon.addTo(map);
-                            deliveryZones.push({ id: zone.id, name: zone.name, coordinates: zone.coordinates, polygon: polygon, visible: zone.visible, takeOrderDays: zone.takeOrderDays, deliveryOrderDays: zone.deliveryOrderDays });
+                            deliveryZones.push(zoneObj);
                             zoneVisibility[zone.id] = zone.visible;
                         });
                         renderDeliveryZones();
@@ -2810,6 +2944,381 @@
             updateStats();
             localStorage.removeItem(STORAGE_KEY);
             showBackupStatus('Данные очищены', 'success');
+        }
+
+        // ===============================
+        // ZONE SCHEDULE COMPARISON
+        // ===============================
+        var dayNamesLC = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+
+        function oldDaysToSet(daysArray) {
+            if (!daysArray || !Array.isArray(daysArray)) return new Set();
+            var result = new Set();
+            daysArray.forEach(function(day, index) {
+                if (day && day.enabled) result.add(dayNames[index]);
+            });
+            return result;
+        }
+
+        function parseDaysList(str) {
+            if (!str || String(str).trim() === '') return new Set();
+            var parts = String(str).split(/[,;\s]+/).map(function(s) { return s.trim(); }).filter(Boolean);
+            var result = new Set();
+            parts.forEach(function(p) {
+                var idx = dayNamesLC.indexOf(p.toLowerCase());
+                if (idx !== -1) result.add(dayNames[idx]);
+            });
+            return result;
+        }
+
+        function setsEqual(a, b) {
+            if (a.size !== b.size) return false;
+            var aArr = Array.from(a);
+            for (var i = 0; i < aArr.length; i++) {
+                if (!b.has(aArr[i])) return false;
+            }
+            return true;
+        }
+
+        function handleZoneScheduleExcel(file) {
+            var fileName = (file && file.name) ? file.name.toLowerCase() : '';
+            if (fileName.indexOf('.xlsx') === -1 && fileName.indexOf('.xls') === -1) {
+                showScheduleStatus('Только Excel файлы (.xlsx, .xls)', 'error'); return;
+            }
+            showScheduleStatus('Загрузка...', 'loading');
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    var data = new Uint8Array(e.target.result);
+                    var workbook = XLSX.read(data, { type: 'array' });
+                    var sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    var rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+                    processZoneScheduleRows(rows);
+                } catch (err) { showScheduleStatus('Ошибка: ' + err.message, 'error'); }
+            };
+            reader.onerror = function() { showScheduleStatus('Ошибка чтения файла', 'error'); };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function normalizeCycle(str) {
+            var s = (str || '').toLowerCase().trim();
+            if (s === 'чет' || s === 'чётная' || s === 'четная' || s === 'ч' || s === 'even') return 'чет';
+            if (s === 'нечет' || s === 'нечётная' || s === 'нечетная' || s === 'н' || s === 'odd') return 'нечет';
+            return '';
+        }
+
+        function fmtDaysWithCycle(daysStr, cycle) {
+            if (!daysStr) return 'нет';
+            return daysStr + (cycle ? ' (' + cycle + '.нед)' : '');
+        }
+
+        function processZoneScheduleRows(rows) {
+            if (!rows || !rows.length) { showScheduleStatus('Файл пуст', 'error'); return; }
+            var count = 0;
+            rows.forEach(function(row) {
+                var zoneName = String(row['Зона'] || row['зона'] || row['Название'] || row['название'] || '').trim();
+                if (!zoneName) return;
+                var currDStr  = String(row['Дни доставки']     || row['дни доставки']     || row['Доставка']         || row['доставка']         || '').trim();
+                var currCycle = normalizeCycle(String(row['Цикл']                          || row['цикл']             || ''));
+                var newDStr   = String(row['Дни доставки new']  || row['дни доставки new'] || row['Доставка new']     || row['доставка new']     || row['Новые дни'] || '').trim();
+                var newCycle  = normalizeCycle(String(row['Цикл new']                      || row['цикл new']         || row['Цикл New']         || ''));
+                var chColor   = String(row['Цвет']              || row['цвет']             || '').trim();
+                newZoneSchedules[zoneName] = {
+                    currentDays: parseDaysList(currDStr),
+                    currentCycle: currCycle,
+                    deliveryDays: newDStr ? parseDaysList(newDStr) : null,
+                    deliveryCycle: newCycle,
+                    changeColor: chColor || '#f59e0b'
+                };
+                count++;
+            });
+            if (count === 0) { showScheduleStatus('Не найден столбец «Зона»', 'error'); return; }
+            applyNewSchedules();
+            var changedCount = deliveryZones.filter(function(z) { return z.hasChanges; }).length;
+            showScheduleStatus('Обновлено ' + count + ' зон, изменений: ' + changedCount, 'success');
+            updateChangesStats(changedCount);
+            renderDeliveryZones();
+            scheduleAutoSave();
+        }
+
+        function applyNewSchedules() {
+            deliveryZones.forEach(function(zone) {
+                var ns = newZoneSchedules[zone.name];
+                if (!ns) { zone.hasChanges = false; return; }
+                zone.newSchedule = ns;
+                zone.changeColor = ns.changeColor || '#f59e0b';
+
+                // Effective current days: from Excel if provided, else from JSON
+                var effCurrDays = (ns.currentDays && ns.currentDays.size > 0) ? ns.currentDays : oldDaysToSet(zone.deliveryOrderDays);
+                zone.currentCycle = ns.currentCycle || '';
+                zone.newDeliveryCycle = ns.deliveryCycle || '';
+
+                if (!ns.deliveryDays || ns.deliveryDays.size === 0) {
+                    // No new days supplied → no change
+                    zone.hasChanges = false; zone.deliveryChanged = false; zone.cycleChanged = false;
+                    if (zone.polygon) {
+                        zone.polygon.setStyle({ color: '#6b7280', fillColor: '#9ca3af', fillOpacity: 0.2, weight: 2 });
+                        rebindZonePopup(zone);
+                    }
+                    return;
+                }
+
+                zone.deliveryChanged = !setsEqual(effCurrDays, ns.deliveryDays);
+                zone.cycleChanged    = zone.currentCycle !== zone.newDeliveryCycle;
+                zone.hasChanges      = zone.deliveryChanged || zone.cycleChanged;
+
+                if (zone.polygon) {
+                    if (zone.hasChanges) {
+                        var c = zone.changeColor;
+                        zone.polygon.setStyle({ color: c, fillColor: c, fillOpacity: 0.28, weight: 3 });
+                    } else {
+                        zone.polygon.setStyle({ color: '#22c55e', fillColor: '#86efac', fillOpacity: 0.18, weight: 2 });
+                    }
+                    rebindZonePopup(zone);
+                }
+            });
+        }
+
+        function rebindZonePopup(zone) {
+            var chColor = zone.changeColor || '#d97706';
+            var html = '<div class="popup-content"><div class="popup-title">';
+            if (zone.hasChanges) html += '<i class="fas fa-exclamation-circle" style="color:' + chColor + ';margin-right:4px;"></i>';
+            html += zone.name + '</div>';
+
+            if (zone.newSchedule && zone.newSchedule.deliveryDays && zone.newSchedule.deliveryDays.size > 0) {
+                // New schedule loaded
+                var ns = zone.newSchedule;
+                var effCurr = (ns.currentDays && ns.currentDays.size > 0) ? ns.currentDays : oldDaysToSet(zone.deliveryOrderDays);
+                var oldDStr = Array.from(effCurr).join(', ') || 'нет';
+                var newDStr = Array.from(ns.deliveryDays).join(', ') || 'нет';
+
+                if (zone.deliveryChanged || zone.cycleChanged) {
+                    html += '<div class="popup-row" style="flex-direction:column;align-items:flex-start;gap:2px;">' +
+                        '<span class="popup-label" style="color:' + chColor + ';font-weight:600;">&#9650; Доставка изменена</span>' +
+                        '<span class="popup-value" style="text-decoration:line-through;color:#9b4d4d;">Было: ' + fmtDaysWithCycle(oldDStr, zone.currentCycle) + '</span>' +
+                        '<span class="popup-value" style="color:#2d7a5e;">Стало: ' + fmtDaysWithCycle(newDStr, zone.newDeliveryCycle) + '</span></div>';
+                } else {
+                    html += '<div class="popup-row"><span class="popup-label">Доставка</span>' +
+                        '<span class="popup-value">' + fmtDaysWithCycle(oldDStr, zone.currentCycle) + '</span></div>';
+                }
+            } else {
+                // No comparison loaded — show days from JSON or Excel current
+                var ns2 = zone.newSchedule;
+                var days = (ns2 && ns2.currentDays && ns2.currentDays.size > 0)
+                    ? Array.from(ns2.currentDays).join(', ')
+                    : (zone.deliveryOrderDays ? Array.from(oldDaysToSet(zone.deliveryOrderDays)).join(', ') : '');
+                var cycle = (ns2 && ns2.currentCycle) ? ns2.currentCycle : (zone.currentCycle || '');
+                if (days) {
+                    html += '<div class="popup-row"><span class="popup-label">Доставка</span>' +
+                        '<span class="popup-value">' + fmtDaysWithCycle(days, cycle) + '</span></div>';
+                }
+            }
+            html += '</div>';
+            zone.polygon.bindPopup(html);
+        }
+
+        function updateChangesStats(changedCount) {
+            var el = document.getElementById('changesStats');
+            if (!el) return;
+            el.style.display = 'block';
+            if (changedCount === 0) {
+                el.innerHTML = '<div class="status status-success"><i class="fas fa-check-circle"></i><span>Изменений нет — расписания совпадают</span></div>';
+            } else {
+                el.innerHTML = '<div class="status" style="background:rgba(245,158,11,0.15);color:#92400e;">' +
+                    '<i class="fas fa-exclamation-triangle"></i><span>Найдено изменений: <strong>' + changedCount + '</strong> ' + getZonesWord(changedCount) + '</span></div>';
+            }
+        }
+
+        function showScheduleStatus(message, type) {
+            type = type || 'info';
+            var icons = { error: '<i class="fas fa-circle-xmark"></i>', success: '<i class="fas fa-circle-check"></i>', loading: '<i class="fas fa-spinner fa-spin"></i>', info: '<i class="fas fa-circle-info"></i>' };
+            var el = document.getElementById('scheduleStatus');
+            if (el) { el.className = 'status status-' + type; el.innerHTML = icons[type] + '<span>' + message + '</span>'; }
+        }
+
+        function downloadScheduleTemplate() {
+            try {
+                var header = ['Зона', 'Дни доставки', 'Цикл', 'Дни доставки new', 'Цикл new', 'Цвет'];
+                var rows = [header];
+                if (deliveryZones.length > 0) {
+                    deliveryZones.forEach(function(z) {
+                        var currDays = (z.newSchedule && z.newSchedule.currentDays && z.newSchedule.currentDays.size > 0)
+                            ? Array.from(z.newSchedule.currentDays).join(',')
+                            : Array.from(oldDaysToSet(z.deliveryOrderDays)).join(',');
+                        var currCycle = (z.newSchedule && z.newSchedule.currentCycle) ? z.newSchedule.currentCycle : (z.currentCycle || '');
+                        var newDays   = (z.newSchedule && z.newSchedule.deliveryDays && z.newSchedule.deliveryDays.size > 0)
+                            ? Array.from(z.newSchedule.deliveryDays).join(',') : '';
+                        var newCycle  = z.newDeliveryCycle || '';
+                        var color     = z.changeColor || '';
+                        rows.push([z.name, currDays, currCycle, newDays, newCycle, color]);
+                    });
+                } else {
+                    rows.push(['(Y02) Ижевск2 (810)', 'Ср',    '',       'Чт',    '',       '#f59e0b']);
+                    rows.push(['(Y04) Ижевск4 (810)', 'Вт,Пт', 'нечет',  'Вт,Пт', 'чет',   '#ef4444']);
+                }
+                var ws = XLSX.utils.aoa_to_sheet(rows);
+                ws['!cols'] = [{ wch: 34 }, { wch: 20 }, { wch: 10 }, { wch: 20 }, { wch: 10 }, { wch: 12 }];
+                var wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Расписание');
+                XLSX.writeFile(wb, 'шаблон_расписания.xlsx');
+            } catch (err) { showScheduleStatus('Ошибка: ' + err.message, 'error'); }
+        }
+
+        function shadeColor(hex, pct) {
+            var num = parseInt((hex || '#888888').replace('#',''), 16);
+            var r = Math.min(255, Math.max(0, (num >> 16) + pct));
+            var g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + pct));
+            var b = Math.min(255, Math.max(0, (num & 0xff) + pct));
+            return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+        }
+
+        // ===============================
+        // SHARE LINK
+        // ===============================
+        function generateShareLink() {
+            try {
+                var data = {
+                    version: 2,
+                    pointsData: pointsData,
+                    groupVisibility: groupVisibility,
+                    customLists: customLists.map(function(list) {
+                        return { id: list.id, name: list.name, points: list.points,
+                            polygons: list.polygons ? list.polygons.map(function(poly) {
+                                return poly.map(function(p) { return { lat: p.lat, lng: p.lng }; });
+                            }) : [] };
+                    }),
+                    deliveryZones: deliveryZones.map(function(zone) {
+                        return { id: zone.id, name: zone.name, coordinates: zone.coordinates,
+                            visible: zone.visible, takeOrderDays: zone.takeOrderDays, deliveryOrderDays: zone.deliveryOrderDays,
+                            newSchedule: zone.newSchedule ? {
+                                currentDays: Array.from(zone.newSchedule.currentDays || new Set()),
+                                currentCycle: zone.newSchedule.currentCycle || '',
+                                deliveryDays: zone.newSchedule.deliveryDays ? Array.from(zone.newSchedule.deliveryDays) : null,
+                                deliveryCycle: zone.newSchedule.deliveryCycle || '',
+                                changeColor: zone.newSchedule.changeColor || '#f59e0b'
+                            } : null,
+                            changeColor: zone.changeColor || '', currentCycle: zone.currentCycle || '', newDeliveryCycle: zone.newDeliveryCycle || '',
+                            hasChanges: zone.hasChanges || false, deliveryChanged: zone.deliveryChanged || false, cycleChanged: zone.cycleChanged || false };
+                    }),
+                    zoneVisibility: zoneVisibility
+                };
+                var json = JSON.stringify(data);
+                if (json.length > 600000) {
+                    showShareStatus('Данные слишком большие (> 600 КБ). Уменьшите кол-во точек или зон.', 'error');
+                    return;
+                }
+                var compressed = LZString.compressToEncodedURIComponent(json);
+                var baseUrl = window.location.href.split('#')[0];
+                currentShareUrl = baseUrl + '#share=' + compressed;
+
+                var preview = currentShareUrl.length > 70 ? currentShareUrl.substring(0, 67) + '…' : currentShareUrl;
+                document.getElementById('shareUrlPreview').textContent = preview;
+                document.getElementById('shareUrlContainer').style.display = 'block';
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(currentShareUrl).then(function() {
+                        showShareStatus('Ссылка скопирована в буфер обмена!', 'success');
+                    }).catch(function() { doFallbackCopy(); });
+                } else { doFallbackCopy(); }
+            } catch (e) { showShareStatus('Ошибка: ' + e.message, 'error'); }
+        }
+
+        function copyShareUrl() {
+            if (!currentShareUrl) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(currentShareUrl).then(function() {
+                    showShareStatus('Ссылка скопирована!', 'success');
+                }).catch(doFallbackCopy);
+            } else { doFallbackCopy(); }
+        }
+
+        function doFallbackCopy() {
+            var ta = document.createElement('textarea');
+            ta.value = currentShareUrl;
+            ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+            document.body.appendChild(ta);
+            ta.focus(); ta.select();
+            try { document.execCommand('copy'); showShareStatus('Ссылка скопирована!', 'success'); }
+            catch (e) { showShareStatus('Скопируйте ссылку из поля выше', 'info'); }
+            document.body.removeChild(ta);
+        }
+
+        function showShareStatus(message, type) {
+            type = type || 'info';
+            var icons = { error: '<i class="fas fa-circle-xmark"></i>', success: '<i class="fas fa-circle-check"></i>', loading: '<i class="fas fa-spinner fa-spin"></i>', info: '<i class="fas fa-circle-info"></i>' };
+            var el = document.getElementById('shareStatus');
+            if (el) {
+                el.className = 'status status-' + type;
+                el.innerHTML = icons[type] + '<span>' + message + '</span>';
+                setTimeout(function() { if (el) { el.innerHTML = ''; el.className = ''; } }, 4000);
+            }
+        }
+
+        function loadFromShareLink() {
+            var hash = window.location.hash;
+            if (!hash || hash.indexOf('#share=') !== 0) return false;
+            var compressed = hash.substring(7);
+            if (!compressed) return false;
+            try {
+                var json = LZString.decompressFromEncodedURIComponent(compressed);
+                if (!json) return false;
+                var data = JSON.parse(json);
+                if (!data || data.version !== 2) return false;
+                clearAllData();
+                pointsData = data.pointsData || [];
+                groupVisibility = data.groupVisibility || {};
+                var polygonColors = ['#6b7280', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4'];
+                if (data.deliveryZones && data.deliveryZones.length > 0) {
+                    data.deliveryZones.forEach(function(z) {
+                        var hasChg = z.hasChanges || false;
+                        var chC = z.changeColor || '#f59e0b';
+                        var polygon = L.polygon(z.coordinates, {
+                            color: hasChg ? chC : '#6b7280', fillColor: hasChg ? chC : '#9ca3af',
+                            fillOpacity: hasChg ? 0.28 : 0.2, weight: hasChg ? 3 : 2
+                        });
+                        var ns = null;
+                        if (z.newSchedule) {
+                            ns = {
+                                currentDays: new Set(z.newSchedule.currentDays || []),
+                                currentCycle: z.newSchedule.currentCycle || '',
+                                deliveryDays: z.newSchedule.deliveryDays ? new Set(z.newSchedule.deliveryDays) : null,
+                                deliveryCycle: z.newSchedule.deliveryCycle || '',
+                                changeColor: z.newSchedule.changeColor || '#f59e0b'
+                            };
+                            newZoneSchedules[z.name] = ns;
+                        }
+                        var zoneObj = { id: z.id, name: z.name, coordinates: z.coordinates, polygon: polygon,
+                            visible: z.visible, takeOrderDays: z.takeOrderDays, deliveryOrderDays: z.deliveryOrderDays,
+                            newSchedule: ns, changeColor: z.changeColor || '', currentCycle: z.currentCycle || '', newDeliveryCycle: z.newDeliveryCycle || '',
+                            hasChanges: hasChg, deliveryChanged: z.deliveryChanged, cycleChanged: z.cycleChanged };
+                        rebindZonePopup(zoneObj);
+                        if (z.visible) polygon.addTo(map);
+                        deliveryZones.push(zoneObj);
+                        zoneVisibility[z.id] = z.visible;
+                    });
+                    renderDeliveryZones();
+                    var changedCount = deliveryZones.filter(function(z) { return z.hasChanges; }).length;
+                    if (changedCount > 0) updateChangesStats(changedCount);
+                }
+                if (data.customLists && data.customLists.length > 0) {
+                    data.customLists.forEach(function(listData) {
+                        var list = { id: listData.id, name: listData.name, points: listData.points || [], polygons: [], polygonLayers: [] };
+                        if (listData.polygons) {
+                            listData.polygons.forEach(function(polyData, idx) {
+                                var lls = polyData.map(function(p) { return L.latLng(p.lat, p.lng); });
+                                var pc = polygonColors[idx % polygonColors.length];
+                                var poly = L.polygon(lls, { color: pc, fillColor: pc, fillOpacity: 0.15, weight: 2, dashArray: '5, 5' }).addTo(map);
+                                list.polygons.push(lls); list.polygonLayers.push(poly);
+                            });
+                        }
+                        customLists.push(list);
+                    });
+                    renderCustomLists();
+                }
+                if (pointsData.length > 0) { createFilters(); initializePoints(); fitToAllPoints(); }
+                history.replaceState(null, null, window.location.pathname + window.location.search);
+                return true;
+            } catch (e) { console.error('Ошибка загрузки ссылки:', e); return false; }
         }
 
         // ===============================
@@ -2890,9 +3399,26 @@
             document.getElementById('listNameInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') createNewList(); });
 
             document.getElementById('backupFileInput').addEventListener('change', function(e) { if (e.target.files && e.target.files[0]) importBackup(e.target.files[0]); e.target.value = ''; });
-            
-            var loaded = loadFromLocalStorage();
-            if (loaded) showBackupStatus('Данные восстановлены', 'success');
+
+            // Schedule Excel
+            var scheduleFileInput = document.getElementById('scheduleFileInput');
+            var scheduleDropZone = document.getElementById('scheduleDropZone');
+            document.getElementById('btnScheduleChoose').addEventListener('click', function() { scheduleFileInput.click(); });
+            scheduleDropZone.addEventListener('click', function() { scheduleFileInput.click(); });
+            scheduleFileInput.addEventListener('change', function(e) { if (e.target.files && e.target.files[0]) handleZoneScheduleExcel(e.target.files[0]); e.target.value = ''; });
+            ['dragenter', 'dragover'].forEach(function(evt) { scheduleDropZone.addEventListener(evt, function(e) { e.preventDefault(); e.stopPropagation(); scheduleDropZone.classList.add('active'); }); });
+            ['dragleave', 'drop'].forEach(function(evt) { scheduleDropZone.addEventListener(evt, function(e) { e.preventDefault(); e.stopPropagation(); scheduleDropZone.classList.remove('active'); }); });
+            scheduleDropZone.addEventListener('drop', function(e) { if (e.dataTransfer.files && e.dataTransfer.files[0]) handleZoneScheduleExcel(e.dataTransfer.files[0]); });
+            document.getElementById('btnScheduleTemplate').addEventListener('click', downloadScheduleTemplate);
+
+            // Load from share link first, otherwise from localStorage
+            var sharedLoaded = loadFromShareLink();
+            if (sharedLoaded) {
+                showBackupStatus('Загружено из ссылки', 'success');
+            } else {
+                var loaded = loadFromLocalStorage();
+                if (loaded) showBackupStatus('Данные восстановлены', 'success');
+            }
             updateStats();
             
             // Load saved theme
@@ -2920,6 +3446,9 @@
         window.importBackup = importBackup;
         window.confirmClearAllData = confirmClearAllData;
         window.setTheme = setTheme;
+        window.generateShareLink = generateShareLink;
+        window.copyShareUrl = copyShareUrl;
+        window.downloadScheduleTemplate = downloadScheduleTemplate;
     </script>
 </body>
 </html>
