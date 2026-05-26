@@ -1205,20 +1205,24 @@
             flex-shrink: 0;
         }
         .share-url-box {
+            width: 100%;
             background: var(--pastel-bg);
             border: 1px solid rgba(0,0,0,0.08);
             border-radius: var(--radius-sm);
-            padding: 8px 10px;
+            padding: 7px 9px;
             margin-top: 6px;
             word-break: break-all;
-            font-size: 9px;
-            color: var(--text-muted);
+            font-size: 10px;
+            color: var(--text-secondary);
             font-family: monospace;
-            line-height: 1.4;
-            cursor: pointer;
+            line-height: 1.5;
+            cursor: text;
+            resize: none;
+            outline: none;
+            box-sizing: border-box;
         }
-        .share-url-box:hover { background: #eef1f6; }
-        body.theme-dark .share-url-box { background: rgba(26,26,46,0.8); }
+        .share-url-box:focus { border-color: var(--pastel-blue); box-shadow: 0 0 0 2px rgba(168,197,226,0.25); }
+        body.theme-dark .share-url-box { background: rgba(26,26,46,0.8); color: var(--text-secondary); }
         @keyframes pulseOrange {
             0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.4); }
             50% { box-shadow: 0 0 0 6px rgba(245,158,11,0); }
@@ -1466,7 +1470,8 @@
                         <i class="fas fa-link"></i><span>Скопировать ссылку</span>
                     </button>
                     <div id="shareUrlContainer" style="display: none;">
-                        <div class="share-url-box" id="shareUrlPreview" onclick="copyShareUrl()" title="Нажмите чтобы скопировать"></div>
+                        <textarea class="share-url-box" id="shareUrlPreview" rows="3" readonly onclick="this.select()" title="Нажмите чтобы выделить всё — затем Ctrl+C"></textarea>
+                        <div style="font-size: 9px; color: var(--text-muted); margin-top: 3px; text-align: right;">Нажмите на поле → Ctrl+C чтобы скопировать</div>
                     </div>
                     <div id="shareStatus" style="min-height: 0; margin-top: 6px; margin-bottom: 8px;"></div>
 
@@ -3267,8 +3272,7 @@
                 var baseUrl = window.location.href.split('#')[0];
                 currentShareUrl = baseUrl + '#share=' + compressed;
 
-                var preview = currentShareUrl.length > 70 ? currentShareUrl.substring(0, 67) + '…' : currentShareUrl;
-                document.getElementById('shareUrlPreview').textContent = preview;
+                document.getElementById('shareUrlPreview').value = currentShareUrl;
                 document.getElementById('shareUrlContainer').style.display = 'block';
 
                 if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -3280,6 +3284,8 @@
         }
 
         function copyShareUrl() {
+            var ta = document.getElementById('shareUrlPreview');
+            if (ta) { ta.select(); ta.setSelectionRange(0, 99999); }
             if (!currentShareUrl) return;
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(currentShareUrl).then(function() {
@@ -3371,10 +3377,16 @@
                     });
                     renderCustomLists();
                 }
-                if (pointsData.length > 0) { createFilters(); initializePoints(); fitToAllPoints(); }
+                if (pointsData.length > 0) { createFilters(); initializePoints(); }
+                // Centre map on ALL loaded content (points + zones + polygons)
+                setTimeout(function() { fitAllElements(); }, 200);
+                // Only clean the hash after confirmed success
                 history.replaceState(null, null, window.location.pathname + window.location.search);
                 return true;
-            } catch (e) { console.error('Ошибка загрузки ссылки:', e); return false; }
+            } catch (e) {
+                console.error('Ошибка загрузки ссылки:', e);
+                return false;
+            }
         }
 
         // ===============================
@@ -3471,6 +3483,10 @@
             var sharedLoaded = loadFromShareLink();
             if (sharedLoaded) {
                 showBackupStatus('Загружено из ссылки', 'success');
+                var stats = [];
+                if (pointsData.length > 0) stats.push(pointsData.length + ' точек');
+                if (deliveryZones.length > 0) stats.push(deliveryZones.length + ' ' + getZonesWord(deliveryZones.length));
+                if (stats.length > 0) showZoneStatus('Из ссылки: ' + stats.join(', '), 'success');
             } else {
                 var loaded = loadFromLocalStorage();
                 if (loaded) showBackupStatus('Данные восстановлены', 'success');
