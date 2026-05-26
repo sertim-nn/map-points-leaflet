@@ -1126,6 +1126,38 @@
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
 
+        .fit-all-btn {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border-radius: 8px;
+            padding: 8px 13px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+        .fit-all-btn:hover {
+            background: rgba(255, 255, 255, 0.97);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.13);
+            transform: translateY(-1px);
+            color: var(--text-primary);
+        }
+        .fit-all-btn:active { transform: translateY(0); }
+        body.theme-dark .fit-all-btn {
+            background: rgba(22, 33, 62, 0.9);
+            border-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+        }
+        body.theme-dark .fit-all-btn:hover { background: rgba(22, 33, 62, 0.98); }
+
         .help-section { padding: 0; }
         .help-section h3 {
             font-size: 12px;
@@ -1484,9 +1516,15 @@
                 <i class="fas fa-mouse" style="color: var(--text-muted); font-size: 11px;"></i>
                 <span style="font-size: 10px; color: var(--text-secondary);">Колёсико мыши для масштабирования</span>
             </div>
-            <div class="zoom-indicator" style="position: absolute; top: 16px; right: 16px; z-index: 1000;">
-                <i class="fas fa-search-plus" style="color: var(--pastel-blue-dark); margin-right: 4px;"></i>
-                Зум: <span id="zoomLevel">11</span>x
+            <div style="position: absolute; top: 16px; right: 16px; z-index: 1000; display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                <div class="zoom-indicator">
+                    <i class="fas fa-search-plus" style="color: var(--pastel-blue-dark); margin-right: 4px;"></i>
+                    Зум: <span id="zoomLevel">11</span>x
+                </div>
+                <button class="fit-all-btn" onclick="fitAllElements()" title="Показать все элементы на карте">
+                    <i class="fas fa-expand" style="color: var(--pastel-blue-dark);"></i>
+                    Показать всё
+                </button>
             </div>
         </div>
     </div>
@@ -2246,6 +2284,24 @@
             if (!pointsData.length) return;
             var bounds = L.latLngBounds(pointsData.map(function(p) { return [p.lat, p.lng]; }));
             map.fitBounds(bounds.pad(0.15));
+        }
+
+        function fitAllElements() {
+            var allLatLngs = [];
+            // Points
+            pointsData.forEach(function(p) { allLatLngs.push([p.lat, p.lng]); });
+            // Delivery zones
+            deliveryZones.forEach(function(z) {
+                if (z.coordinates) z.coordinates.forEach(function(c) { allLatLngs.push(c); });
+            });
+            // Custom list polygons
+            customLists.forEach(function(list) {
+                if (list.polygons) list.polygons.forEach(function(poly) {
+                    poly.forEach(function(p) { allLatLngs.push([p.lat, p.lng]); });
+                });
+            });
+            if (allLatLngs.length === 0) return;
+            map.fitBounds(L.latLngBounds(allLatLngs).pad(0.1));
         }
 
         function downloadTemplate() {
@@ -3446,6 +3502,7 @@
         window.importBackup = importBackup;
         window.confirmClearAllData = confirmClearAllData;
         window.setTheme = setTheme;
+        window.fitAllElements = fitAllElements;
         window.generateShareLink = generateShareLink;
         window.copyShareUrl = copyShareUrl;
         window.downloadScheduleTemplate = downloadScheduleTemplate;
