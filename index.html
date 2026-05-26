@@ -1093,15 +1093,15 @@
             padding: 0;
             overflow: hidden;
         }
-        .leaflet-popup-content { margin: 0; min-width: 180px; }
+        .leaflet-popup-content { margin: 0; min-width: 210px; }
         .leaflet-popup-tip { background: white; }
 
-        .popup-content { padding: 12px; }
-        .popup-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
-        .popup-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 8px; background: var(--pastel-bg); border-radius: 6px; margin-bottom: 4px; }
-        .popup-label { font-size: 10px; color: var(--text-muted); }
-        .popup-value { font-size: 10px; font-weight: 500; color: var(--text-primary); }
-        .popup-coords { font-size: 9px; color: var(--text-muted); text-align: center; padding-top: 6px; border-top: 1px solid rgba(0, 0, 0, 0.06); margin-top: 6px; }
+        .popup-content { padding: 14px; }
+        .popup-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px; line-height: 1.3; }
+        .popup-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: var(--pastel-bg); border-radius: 6px; margin-bottom: 5px; }
+        .popup-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+        .popup-value { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+        .popup-coords { font-size: 11px; color: var(--text-muted); text-align: center; padding-top: 8px; border-top: 1px solid rgba(0, 0, 0, 0.06); margin-top: 6px; }
 
         .map-hint {
             background: rgba(255, 255, 255, 0.75);
@@ -3093,10 +3093,10 @@
                 var newDStr = Array.from(ns.deliveryDays).join(', ') || 'нет';
 
                 if (zone.deliveryChanged || zone.cycleChanged) {
-                    html += '<div class="popup-row" style="flex-direction:column;align-items:flex-start;gap:2px;">' +
-                        '<span class="popup-label" style="color:' + chColor + ';font-weight:600;">&#9650; Доставка изменена</span>' +
-                        '<span class="popup-value" style="text-decoration:line-through;color:#9b4d4d;">Было: ' + fmtDaysWithCycle(oldDStr, zone.currentCycle) + '</span>' +
-                        '<span class="popup-value" style="color:#2d7a5e;">Стало: ' + fmtDaysWithCycle(newDStr, zone.newDeliveryCycle) + '</span></div>';
+                    html += '<div class="popup-row" style="flex-direction:column;align-items:flex-start;gap:4px;">' +
+                        '<span class="popup-label" style="color:' + chColor + ';font-weight:700;font-size:12px;">&#9650; Доставка изменена</span>' +
+                        '<span class="popup-value" style="text-decoration:line-through;color:#9b4d4d;font-size:13px;">Было: ' + fmtDaysWithCycle(oldDStr, zone.currentCycle) + '</span>' +
+                        '<span class="popup-value" style="color:#2d7a5e;font-size:13px;">Стало: ' + fmtDaysWithCycle(newDStr, zone.newDeliveryCycle) + '</span></div>';
                 } else {
                     html += '<div class="popup-row"><span class="popup-label">Доставка</span>' +
                         '<span class="popup-value">' + fmtDaysWithCycle(oldDStr, zone.currentCycle) + '</span></div>';
