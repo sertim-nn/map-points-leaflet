@@ -1045,19 +1045,21 @@ body {
     background: #dbeafe;
 }
 
-.leaflet-tooltip.zone-name-label {
+.zone-name-label {
     background: white;
-    border: 1px solid rgba(0,0,0,0.12);
+    border: 1px solid rgba(0,0,0,0.15);
     color: #374151;
     font-size: 11px;
     font-weight: 600;
-    padding: 2px 7px;
+    padding: 3px 8px;
     border-radius: 4px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.10);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
     white-space: nowrap;
     pointer-events: none;
+    display: inline-block;
+    transform: translate(-50%, -50%);
+    font-family: 'Inter', sans-serif;
 }
-.leaflet-tooltip.zone-name-label::before { display: none; }
 
 /* ===============================
    HELP SECTION

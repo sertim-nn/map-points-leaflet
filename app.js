@@ -1124,6 +1124,10 @@
             zoneVisibility[zoneId] = visible;
             if (visible) zone.polygon.addTo(map);
             else map.removeLayer(zone.polygon);
+            if (zone._labelMarker) {
+                if (visible) zone._labelMarker.addTo(map);
+                else map.removeLayer(zone._labelMarker);
+            }
             var card = document.getElementById('zone-card-' + zoneId);
             if (card) { if (visible) card.classList.add('active'); else card.classList.remove('active'); }
         }
@@ -1134,6 +1138,10 @@
                 zoneVisibility[zone.id] = visible;
                 if (visible) zone.polygon.addTo(map);
                 else map.removeLayer(zone.polygon);
+                if (zone._labelMarker) {
+                    if (visible) zone._labelMarker.addTo(map);
+                    else map.removeLayer(zone._labelMarker);
+                }
             });
             renderDeliveryZones();
         }
@@ -1148,6 +1156,7 @@
             if (idx === -1) return;
             var zone = deliveryZones[idx];
             if (zone.polygon) map.removeLayer(zone.polygon);
+            if (zone._labelMarker) map.removeLayer(zone._labelMarker);
             deliveryZones.splice(idx, 1);
             delete zoneVisibility[zoneId];
             renderDeliveryZones();
@@ -1376,8 +1385,14 @@
                 delete markersByGroup[group];
             });
             Object.keys(groupOutlines).forEach(function(g) { if (groupOutlines[g]) map.removeLayer(groupOutlines[g]); delete groupOutlines[g]; });
-            deliveryZones.forEach(function(zone) { if (zone.polygon) map.removeLayer(zone.polygon); });
+            deliveryZones.forEach(function(zone) {
+                if (zone.polygon) map.removeLayer(zone.polygon);
+                if (zone._labelMarker) map.removeLayer(zone._labelMarker);
+            });
             deliveryZones = [];
+            zoneLabelsVisible = false;
+            var zoneLabelBtn = document.getElementById('zoneLabelBtn');
+            if (zoneLabelBtn) zoneLabelBtn.classList.remove('fit-all-btn-active');
             zoneVisibility = {};
             newZoneSchedules = {};
             customLists.forEach(function(list) { if (list.polygonLayers) list.polygonLayers.forEach(function(layer) { map.removeLayer(layer); }); });
@@ -2115,14 +2130,24 @@
             deliveryZones.forEach(function(zone) {
                 if (!zone.polygon) return;
                 if (zoneLabelsVisible) {
-                    zone.polygon.bindTooltip(zone.name || '', {
-                        permanent: true,
-                        direction: 'center',
-                        className: 'zone-name-label',
-                        interactive: false
+                    var center = zone.polygon.getBounds().getCenter();
+                    zone._labelMarker = L.marker(center, {
+                        icon: L.divIcon({
+                            className: 'zone-name-label',
+                            html: zone.name || '',
+                            iconSize: null,
+                            iconAnchor: [0, 0]
+                        }),
+                        interactive: false,
+                        keyboard: false,
+                        zIndexOffset: -100
                     });
+                    if (zone.visible !== false) zone._labelMarker.addTo(map);
                 } else {
-                    zone.polygon.unbindTooltip();
+                    if (zone._labelMarker) {
+                        map.removeLayer(zone._labelMarker);
+                        zone._labelMarker = null;
+                    }
                 }
             });
             var btn = document.getElementById('zoneLabelBtn');
