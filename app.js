@@ -22,6 +22,7 @@
         var newZoneSchedules = {}; // zoneName -> { currentDays: Set, currentCycle, deliveryDays: Set, deliveryCycle, changeColor }
         var currentShareUrl = '';
         var isViewMode = false;
+        var zoneLabelsVisible = false;
 
         var colorPalette = ['#a8c5e2', '#c9b8e0', '#b5d8cc', '#e8c4c4', '#f0d5c0', '#c4dce8', '#d4c4e8', '#bfd8bf', '#e0c4d4', '#c4d4e8'];
 
@@ -2109,6 +2110,25 @@
             if (!isViewMode) renderProjectsList();
         });
 
+        function toggleZoneLabels() {
+            zoneLabelsVisible = !zoneLabelsVisible;
+            deliveryZones.forEach(function(zone) {
+                if (!zone.polygon) return;
+                if (zoneLabelsVisible) {
+                    zone.polygon.bindTooltip(zone.name || '', {
+                        permanent: true,
+                        direction: 'center',
+                        className: 'zone-name-label',
+                        interactive: false
+                    });
+                } else {
+                    zone.polygon.unbindTooltip();
+                }
+            });
+            var btn = document.getElementById('zoneLabelBtn');
+            if (btn) btn.classList.toggle('fit-all-btn-active', zoneLabelsVisible);
+        }
+
         // Global functions
         window.switchTab = switchTab;
         window.toggleAll = toggleAll;
@@ -2139,3 +2159,4 @@
         window.deleteProject = deleteProject;
         window.generateProjectViewLink = generateProjectViewLink;
         window.renderProjectsList = renderProjectsList;
+        window.toggleZoneLabels = toggleZoneLabels;
