@@ -2125,12 +2125,59 @@
             if (!isViewMode) renderProjectsList();
         });
 
+        function pointInPolygon(pt, ring) {
+            var x = pt[0], y = pt[1], inside = false;
+            for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+                var xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+                if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+            }
+            return inside;
+        }
+
+        function getZoneLabelCenter(zone) {
+            var coords = zone.coordinates;
+            if (!coords || coords.length < 3) return zone.polygon.getBounds().getCenter();
+
+            // True centroid of polygon
+            var n = coords.length, area = 0, cLat = 0, cLng = 0;
+            for (var i = 0, j = n - 1; i < n; j = i++) {
+                var cross = coords[i][0] * coords[j][1] - coords[j][0] * coords[i][1];
+                area += cross;
+                cLat += (coords[i][0] + coords[j][0]) * cross;
+                cLng += (coords[i][1] + coords[j][1]) * cross;
+            }
+            area /= 2;
+            if (Math.abs(area) > 1e-12) { cLat /= (6 * area); cLng /= (6 * area); }
+            else {
+                cLat = coords.reduce(function(s, p) { return s + p[0]; }, 0) / n;
+                cLng = coords.reduce(function(s, p) { return s + p[1]; }, 0) / n;
+            }
+            if (pointInPolygon([cLat, cLng], coords)) return L.latLng(cLat, cLng);
+
+            // Fallback: grid search for the interior point closest to bounding box center
+            var b = zone.polygon.getBounds();
+            var south = b.getSouth(), north = b.getNorth(), west = b.getWest(), east = b.getEast();
+            var midLat = (south + north) / 2, midLng = (west + east) / 2;
+            var steps = 7, best = null, bestD = Infinity;
+            for (var r = 1; r <= steps; r++) {
+                for (var c = 1; c <= steps; c++) {
+                    var lat = south + (north - south) * r / (steps + 1);
+                    var lng = west  + (east  - west)  * c / (steps + 1);
+                    if (pointInPolygon([lat, lng], coords)) {
+                        var d = (lat - midLat) * (lat - midLat) + (lng - midLng) * (lng - midLng);
+                        if (d < bestD) { bestD = d; best = L.latLng(lat, lng); }
+                    }
+                }
+            }
+            return best || zone.polygon.getBounds().getCenter();
+        }
+
         function toggleZoneLabels() {
             zoneLabelsVisible = !zoneLabelsVisible;
             deliveryZones.forEach(function(zone) {
                 if (!zone.polygon) return;
                 if (zoneLabelsVisible) {
-                    var center = zone.polygon.getBounds().getCenter();
+                    var center = getZoneLabelCenter(zone);
                     zone._labelMarker = L.marker(center, {
                         icon: L.divIcon({
                             className: 'zone-name-label',
