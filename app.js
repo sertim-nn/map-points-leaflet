@@ -1378,6 +1378,7 @@
             deliveryZones.forEach(function(zone) { if (zone.polygon) map.removeLayer(zone.polygon); });
             deliveryZones = [];
             zoneVisibility = {};
+            newZoneSchedules = {};
             customLists.forEach(function(list) { if (list.polygonLayers) list.polygonLayers.forEach(function(layer) { map.removeLayer(layer); }); });
             customLists = [];
             pointsData = [];
@@ -1879,6 +1880,7 @@
                 if (!data || data.version !== 2) { showProjectStatus('Неверный формат', 'error'); return; }
                 restoreDataObject(data);
                 updateStats();
+                saveToLocalStorage(); // make this the active auto-save state
                 showProjectStatus('Проект «' + name + '» загружен', 'success');
                 switchTab('map');
             } catch (e) { showProjectStatus('Ошибка загрузки: ' + e.message, 'error'); }
