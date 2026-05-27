@@ -21,6 +21,7 @@
 
         var newZoneSchedules = {}; // zoneName -> { currentDays: Set, currentCycle, deliveryDays: Set, deliveryCycle, changeColor }
         var currentShareUrl = '';
+        var isViewMode = false;
 
         var colorPalette = ['#a8c5e2', '#c9b8e0', '#b5d8cc', '#e8c4c4', '#f0d5c0', '#c4dce8', '#d4c4e8', '#bfd8bf', '#e0c4d4', '#c4d4e8'];
 
@@ -1157,6 +1158,7 @@
         // ===============================
         var STORAGE_KEY = 'mappoints_data';
         var AUTO_SAVE_DELAY = 2000;
+        var PROJECT_PREFIX = 'mappoints_project_v1_';
         var autoSaveTimeout = null;
 
         function saveToLocalStorage() {
@@ -1701,6 +1703,65 @@
             }
         }
 
+        // Shared restore logic used by loadFromShareLink, loadFromViewLink, loadProject
+        function restoreDataObject(data) {
+            clearAllData();
+            pointsData = data.pointsData || [];
+            groupVisibility = data.groupVisibility || {};
+            var polygonColors = ['#6b7280', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4'];
+            if (data.deliveryZones && data.deliveryZones.length > 0) {
+                data.deliveryZones.forEach(function(z) {
+                    var hasChg = z.hasChanges || false;
+                    var chC = z.changeColor || '#f59e0b';
+                    var polygon = L.polygon(z.coordinates, {
+                        color: '#6b7280', fillColor: hasChg ? chC : '#9ca3af',
+                        fillOpacity: hasChg ? 0.15 : 0.2, weight: 2,
+                        dashArray: hasChg ? '10, 6' : null
+                    });
+                    var ns = null;
+                    if (z.newSchedule) {
+                        ns = {
+                            currentDays: new Set(z.newSchedule.currentDays || []),
+                            currentCycle: z.newSchedule.currentCycle || '',
+                            deliveryDays: z.newSchedule.deliveryDays ? new Set(z.newSchedule.deliveryDays) : null,
+                            deliveryCycle: z.newSchedule.deliveryCycle || '',
+                            changeColor: z.newSchedule.changeColor || '#f59e0b'
+                        };
+                        newZoneSchedules[z.name] = ns;
+                    }
+                    var zoneObj = { id: z.id, name: z.name, coordinates: z.coordinates, polygon: polygon,
+                        visible: z.visible, takeOrderDays: z.takeOrderDays, deliveryOrderDays: z.deliveryOrderDays,
+                        newSchedule: ns, changeColor: z.changeColor || '', currentCycle: z.currentCycle || '', newDeliveryCycle: z.newDeliveryCycle || '',
+                        hasChanges: hasChg, deliveryChanged: z.deliveryChanged, cycleChanged: z.cycleChanged };
+                    rebindZonePopup(zoneObj);
+                    if (z.visible) polygon.addTo(map);
+                    deliveryZones.push(zoneObj);
+                    zoneVisibility[z.id] = z.visible;
+                });
+                renderDeliveryZones();
+                var changedCount = deliveryZones.filter(function(z) { return z.hasChanges; }).length;
+                if (changedCount > 0) updateChangesStats(changedCount);
+            }
+            if (data.customLists && data.customLists.length > 0) {
+                data.customLists.forEach(function(listData) {
+                    var list = { id: listData.id, name: listData.name, points: listData.points || [], polygons: [], polygonLayers: [] };
+                    if (listData.polygons) {
+                        listData.polygons.forEach(function(polyData, idx) {
+                            var lls = polyData.map(function(p) { return L.latLng(p.lat, p.lng); });
+                            var pc = polygonColors[idx % polygonColors.length];
+                            var poly = L.polygon(lls, { color: pc, fillColor: pc, fillOpacity: 0.15, weight: 2, dashArray: '5, 5' }).addTo(map);
+                            list.polygons.push(lls); list.polygonLayers.push(poly);
+                        });
+                    }
+                    customLists.push(list);
+                });
+                renderCustomLists();
+            }
+            if (pointsData.length > 0) { createFilters(); initializePoints(); }
+            setTimeout(function() { fitAllElements(); }, 200);
+            return true;
+        }
+
         function loadFromShareLink() {
             var hash = window.location.hash;
             if (!hash || hash.indexOf('#share=') !== 0) return false;
@@ -1711,68 +1772,207 @@
                 if (!json) return false;
                 var data = JSON.parse(json);
                 if (!data || data.version !== 2) return false;
-                clearAllData();
-                pointsData = data.pointsData || [];
-                groupVisibility = data.groupVisibility || {};
-                var polygonColors = ['#6b7280', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4'];
-                if (data.deliveryZones && data.deliveryZones.length > 0) {
-                    data.deliveryZones.forEach(function(z) {
-                        var hasChg = z.hasChanges || false;
-                        var chC = z.changeColor || '#f59e0b';
-                        var polygon = L.polygon(z.coordinates, {
-                            color: '#6b7280', fillColor: hasChg ? chC : '#9ca3af',
-                            fillOpacity: hasChg ? 0.15 : 0.2, weight: 2,
-                            dashArray: hasChg ? '10, 6' : null
-                        });
-                        var ns = null;
-                        if (z.newSchedule) {
-                            ns = {
-                                currentDays: new Set(z.newSchedule.currentDays || []),
-                                currentCycle: z.newSchedule.currentCycle || '',
-                                deliveryDays: z.newSchedule.deliveryDays ? new Set(z.newSchedule.deliveryDays) : null,
-                                deliveryCycle: z.newSchedule.deliveryCycle || '',
-                                changeColor: z.newSchedule.changeColor || '#f59e0b'
-                            };
-                            newZoneSchedules[z.name] = ns;
-                        }
-                        var zoneObj = { id: z.id, name: z.name, coordinates: z.coordinates, polygon: polygon,
-                            visible: z.visible, takeOrderDays: z.takeOrderDays, deliveryOrderDays: z.deliveryOrderDays,
-                            newSchedule: ns, changeColor: z.changeColor || '', currentCycle: z.currentCycle || '', newDeliveryCycle: z.newDeliveryCycle || '',
-                            hasChanges: hasChg, deliveryChanged: z.deliveryChanged, cycleChanged: z.cycleChanged };
-                        rebindZonePopup(zoneObj);
-                        if (z.visible) polygon.addTo(map);
-                        deliveryZones.push(zoneObj);
-                        zoneVisibility[z.id] = z.visible;
-                    });
-                    renderDeliveryZones();
-                    var changedCount = deliveryZones.filter(function(z) { return z.hasChanges; }).length;
-                    if (changedCount > 0) updateChangesStats(changedCount);
-                }
-                if (data.customLists && data.customLists.length > 0) {
-                    data.customLists.forEach(function(listData) {
-                        var list = { id: listData.id, name: listData.name, points: listData.points || [], polygons: [], polygonLayers: [] };
-                        if (listData.polygons) {
-                            listData.polygons.forEach(function(polyData, idx) {
-                                var lls = polyData.map(function(p) { return L.latLng(p.lat, p.lng); });
-                                var pc = polygonColors[idx % polygonColors.length];
-                                var poly = L.polygon(lls, { color: pc, fillColor: pc, fillOpacity: 0.15, weight: 2, dashArray: '5, 5' }).addTo(map);
-                                list.polygons.push(lls); list.polygonLayers.push(poly);
-                            });
-                        }
-                        customLists.push(list);
-                    });
-                    renderCustomLists();
-                }
-                if (pointsData.length > 0) { createFilters(); initializePoints(); }
-                // Centre map on ALL loaded content (points + zones + polygons)
-                setTimeout(function() { fitAllElements(); }, 200);
-                // Only clean the hash after confirmed success
+                if (!restoreDataObject(data)) return false;
                 history.replaceState(null, null, window.location.pathname + window.location.search);
                 return true;
             } catch (e) {
                 console.error('Ошибка загрузки ссылки:', e);
                 return false;
             }
+        }
+
+        function loadFromViewLink() {
+            var hash = window.location.hash;
+            if (!hash || hash.indexOf('#view=') !== 0) return false;
+            var compressed = hash.substring(6);
+            if (!compressed) return false;
+            try {
+                var json = LZString.decompressFromEncodedURIComponent(compressed);
+                if (!json) return false;
+                var data = JSON.parse(json);
+                if (!data || data.version !== 2) return false;
+                if (!restoreDataObject(data)) return false;
+                isViewMode = true;
+                document.body.classList.add('view-mode');
+                var overlay = document.getElementById('viewModeOverlay');
+                if (overlay) {
+                    overlay.style.display = 'flex';
+                    var nameEl = document.getElementById('viewModeProjectName');
+                    if (nameEl && data.projectName) nameEl.textContent = data.projectName;
+                    else if (nameEl) nameEl.textContent = 'MapPoints';
+                }
+                history.replaceState(null, null, window.location.pathname + window.location.search);
+                return true;
+            } catch (e) {
+                console.error('Ошибка загрузки view-ссылки:', e);
+                return false;
+            }
+        }
+
+        // ===============================
+        // PROJECTS
+        // ===============================
+        function buildCurrentDataPayload(projectName) {
+            return {
+                version: 2,
+                projectName: projectName || '',
+                pointsData: pointsData,
+                groupVisibility: groupVisibility,
+                customLists: customLists.map(function(list) {
+                    return { id: list.id, name: list.name, points: list.points,
+                        polygons: list.polygons ? list.polygons.map(function(poly) {
+                            return poly.map(function(p) { return { lat: p.lat, lng: p.lng }; });
+                        }) : [] };
+                }),
+                deliveryZones: deliveryZones.map(function(zone) {
+                    return { id: zone.id, name: zone.name, coordinates: zone.coordinates,
+                        visible: zone.visible, takeOrderDays: zone.takeOrderDays, deliveryOrderDays: zone.deliveryOrderDays,
+                        newSchedule: zone.newSchedule ? {
+                            currentDays: Array.from(zone.newSchedule.currentDays || new Set()),
+                            currentCycle: zone.newSchedule.currentCycle || '',
+                            deliveryDays: zone.newSchedule.deliveryDays ? Array.from(zone.newSchedule.deliveryDays) : null,
+                            deliveryCycle: zone.newSchedule.deliveryCycle || '',
+                            changeColor: zone.newSchedule.changeColor || '#f59e0b'
+                        } : null,
+                        changeColor: zone.changeColor || '', currentCycle: zone.currentCycle || '', newDeliveryCycle: zone.newDeliveryCycle || '',
+                        hasChanges: zone.hasChanges || false, deliveryChanged: zone.deliveryChanged || false, cycleChanged: zone.cycleChanged || false };
+                }),
+                zoneVisibility: zoneVisibility
+            };
+        }
+
+        function saveCurrentProject() {
+            var nameEl = document.getElementById('projectNameInput');
+            var name = nameEl ? nameEl.value.trim() : '';
+            if (!name) { showProjectStatus('Введите название проекта', 'error'); return; }
+            try {
+                var payload = buildCurrentDataPayload(name);
+                var stored = { version: 2, savedAt: new Date().toISOString(), name: name, data: payload };
+                localStorage.setItem(PROJECT_PREFIX + name, JSON.stringify(stored));
+                if (nameEl) nameEl.value = '';
+                showProjectStatus('Проект «' + name + '» сохранён', 'success');
+                renderProjectsList();
+            } catch (e) { showProjectStatus('Ошибка сохранения: ' + e.message, 'error'); }
+        }
+
+        function listProjects() {
+            var projects = [];
+            for (var i = 0; i < localStorage.length; i++) {
+                var key = localStorage.key(i);
+                if (key && key.indexOf(PROJECT_PREFIX) === 0) {
+                    try {
+                        var stored = JSON.parse(localStorage.getItem(key));
+                        if (stored && stored.name) projects.push({ name: stored.name, savedAt: stored.savedAt });
+                    } catch (e) {}
+                }
+            }
+            projects.sort(function(a, b) { return (b.savedAt || '').localeCompare(a.savedAt || ''); });
+            return projects;
+        }
+
+        function loadProject(name) {
+            var raw = localStorage.getItem(PROJECT_PREFIX + name);
+            if (!raw) { showProjectStatus('Проект не найден', 'error'); return; }
+            try {
+                var stored = JSON.parse(raw);
+                var data = stored.data;
+                if (!data || data.version !== 2) { showProjectStatus('Неверный формат', 'error'); return; }
+                restoreDataObject(data);
+                updateStats();
+                showProjectStatus('Проект «' + name + '» загружен', 'success');
+                switchTab('map');
+            } catch (e) { showProjectStatus('Ошибка загрузки: ' + e.message, 'error'); }
+        }
+
+        function deleteProject(name) {
+            if (!confirm('Удалить проект «' + name + '»?')) return;
+            localStorage.removeItem(PROJECT_PREFIX + name);
+            var container = document.getElementById('viewLinkContainer');
+            if (container) container.style.display = 'none';
+            renderProjectsList();
+        }
+
+        function generateProjectViewLink(name) {
+            var raw = localStorage.getItem(PROJECT_PREFIX + name);
+            if (!raw) { showProjectStatus('Проект не найден', 'error'); return; }
+            try {
+                var stored = JSON.parse(raw);
+                var data = stored.data;
+                if (!data) { showProjectStatus('Неверный формат', 'error'); return; }
+                data.projectName = name;
+                var json = JSON.stringify(data);
+                if (json.length > 600000) { showProjectStatus('Проект слишком большой для ссылки', 'error'); return; }
+                var compressed = LZString.compressToEncodedURIComponent(json);
+                var viewUrl = window.location.href.split('#')[0] + '#view=' + compressed;
+                var container = document.getElementById('viewLinkContainer');
+                var preview = document.getElementById('viewLinkPreview');
+                if (preview) preview.value = viewUrl;
+                if (container) container.style.display = 'block';
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(viewUrl).then(function() {
+                        showProjectStatus('Ссылка для просмотра скопирована!', 'success');
+                    }).catch(function() { doProjectFallbackCopy(viewUrl); });
+                } else { doProjectFallbackCopy(viewUrl); }
+            } catch (e) { showProjectStatus('Ошибка: ' + e.message, 'error'); }
+        }
+
+        function doProjectFallbackCopy(url) {
+            var ta = document.createElement('textarea');
+            ta.value = url;
+            ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+            document.body.appendChild(ta);
+            ta.focus(); ta.select();
+            try { document.execCommand('copy'); showProjectStatus('Ссылка скопирована!', 'success'); }
+            catch (e) { showProjectStatus('Скопируйте ссылку из поля ниже', 'info'); }
+            document.body.removeChild(ta);
+        }
+
+        function showProjectStatus(message, type) {
+            type = type || 'info';
+            var icons = { error: '<i class="fas fa-circle-xmark"></i>', success: '<i class="fas fa-circle-check"></i>', info: '<i class="fas fa-circle-info"></i>' };
+            var el = document.getElementById('projectsSaveStatus');
+            if (el) {
+                el.className = 'status status-' + (type === 'error' ? 'error' : type === 'success' ? 'success' : 'loading');
+                el.innerHTML = icons[type] + '<span>' + message + '</span>';
+                setTimeout(function() { if (el) { el.innerHTML = ''; el.className = ''; } }, 4000);
+            }
+        }
+
+        function formatProjectDate(iso) {
+            if (!iso) return '';
+            try {
+                var d = new Date(iso);
+                return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+                    + ', ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            } catch (e) { return ''; }
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function renderProjectsList() {
+            var container = document.getElementById('projectsList');
+            if (!container) return;
+            var projects = listProjects();
+            var countEl = document.getElementById('projectsCount');
+            if (countEl) countEl.textContent = projects.length;
+            if (projects.length === 0) {
+                container.innerHTML = '<div style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 8px 0 4px;">Нет сохранённых проектов</div>';
+                return;
+            }
+            container.innerHTML = projects.map(function(p) {
+                var s = p.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                return '<div class="project-card">'
+                    + '<div class="project-card-info">'
+                    + '<div class="project-card-name">' + escapeHtml(p.name) + '</div>'
+                    + '<div class="project-card-date">' + formatProjectDate(p.savedAt) + '</div>'
+                    + '</div>'
+                    + '<button class="zone-btn" onclick="loadProject(\'' + s + '\')" title="Загрузить проект"><i class="fas fa-folder-open"></i></button>'
+                    + '<button class="zone-btn" onclick="generateProjectViewLink(\'' + s + '\')" title="Ссылка для просмотра"><i class="fas fa-link"></i></button>'
+                    + '<button class="zone-btn danger" onclick="deleteProject(\'' + s + '\')" title="Удалить"><i class="fas fa-trash"></i></button>'
+                    + '</div>';
+            }).join('');
         }
 
         // ===============================
@@ -1865,22 +2065,25 @@
             scheduleDropZone.addEventListener('drop', function(e) { if (e.dataTransfer.files && e.dataTransfer.files[0]) handleZoneScheduleExcel(e.dataTransfer.files[0]); });
             document.getElementById('btnScheduleTemplate').addEventListener('click', downloadScheduleTemplate);
 
-            // Load from share link first, otherwise from localStorage
-            var sharedLoaded = loadFromShareLink();
-            if (sharedLoaded) {
-                showBackupStatus('Загружено из ссылки', 'success');
-                var stats = [];
-                if (pointsData.length > 0) stats.push(pointsData.length + ' точек');
-                if (deliveryZones.length > 0) stats.push(deliveryZones.length + ' ' + getZonesWord(deliveryZones.length));
-                if (stats.length > 0) showZoneStatus('Из ссылки: ' + stats.join(', '), 'success');
-            } else {
-                var loaded = loadFromLocalStorage();
-                if (loaded) showBackupStatus('Данные восстановлены', 'success');
+            // Load from view link → share link → localStorage (priority order)
+            var viewLoaded = loadFromViewLink();
+            if (!viewLoaded) {
+                var sharedLoaded = loadFromShareLink();
+                if (sharedLoaded) {
+                    showBackupStatus('Загружено из ссылки', 'success');
+                    var stats = [];
+                    if (pointsData.length > 0) stats.push(pointsData.length + ' точек');
+                    if (deliveryZones.length > 0) stats.push(deliveryZones.length + ' ' + getZonesWord(deliveryZones.length));
+                    if (stats.length > 0) showZoneStatus('Из ссылки: ' + stats.join(', '), 'success');
+                } else {
+                    var loaded = loadFromLocalStorage();
+                    if (loaded) showBackupStatus('Данные восстановлены', 'success');
+                }
             }
             updateStats();
-            
-            // Load saved theme
+
             loadTheme();
+            if (!isViewMode) renderProjectsList();
         });
 
         // Global functions
@@ -1908,3 +2111,8 @@
         window.generateShareLink = generateShareLink;
         window.copyShareUrl = copyShareUrl;
         window.downloadScheduleTemplate = downloadScheduleTemplate;
+        window.saveCurrentProject = saveCurrentProject;
+        window.loadProject = loadProject;
+        window.deleteProject = deleteProject;
+        window.generateProjectViewLink = generateProjectViewLink;
+        window.renderProjectsList = renderProjectsList;
