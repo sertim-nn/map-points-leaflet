@@ -1792,6 +1792,14 @@
         function loadFromViewLink() {
             var hash = window.location.hash;
             if (!hash || hash.indexOf('#view=') !== 0) return false;
+
+            // Session already has a view loaded → user is refreshing → show expired screen.
+            // This fires regardless of whether the hash is still in the URL or not.
+            if (sessionStorage.getItem('mappoints_view_session') === '1') {
+                showViewExpiredScreen();
+                return true; // returning true prevents the editor from loading
+            }
+
             var compressed = hash.substring(6);
             if (!compressed) return false;
             try {
@@ -1806,13 +1814,11 @@
                 if (overlay) {
                     overlay.style.display = 'flex';
                     var nameEl = document.getElementById('viewModeProjectName');
-                    if (nameEl && data.projectName) nameEl.textContent = data.projectName;
-                    else if (nameEl) nameEl.textContent = 'MapPoints';
+                    if (nameEl) nameEl.textContent = data.projectName || 'MapPoints';
                 }
-                // Clean hash and mark this tab as a view session.
-                // On refresh (no hash) the session flag triggers the expired screen instead of editor.
-                history.replaceState(null, null, window.location.pathname + window.location.search);
+                // Mark session BEFORE cleaning hash so any refresh triggers expired screen
                 sessionStorage.setItem('mappoints_view_session', '1');
+                history.replaceState(null, null, window.location.pathname + window.location.search);
                 return true;
             } catch (e) {
                 console.error('Ошибка загрузки view-ссылки:', e);
