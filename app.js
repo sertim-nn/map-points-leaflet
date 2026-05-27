@@ -1782,6 +1782,13 @@
             }
         }
 
+        function showViewExpiredScreen() {
+            var screen = document.getElementById('viewExpiredScreen');
+            if (screen) screen.style.display = 'flex';
+            var main = document.querySelector('.main-container');
+            if (main) main.style.display = 'none';
+        }
+
         function loadFromViewLink() {
             var hash = window.location.hash;
             if (!hash || hash.indexOf('#view=') !== 0) return false;
@@ -1802,7 +1809,10 @@
                     if (nameEl && data.projectName) nameEl.textContent = data.projectName;
                     else if (nameEl) nameEl.textContent = 'MapPoints';
                 }
+                // Clean hash and mark this tab as a view session.
+                // On refresh (no hash) the session flag triggers the expired screen instead of editor.
                 history.replaceState(null, null, window.location.pathname + window.location.search);
+                sessionStorage.setItem('mappoints_view_session', '1');
                 return true;
             } catch (e) {
                 console.error('Ошибка загрузки view-ссылки:', e);
@@ -2070,6 +2080,11 @@
             // Load from view link → share link → localStorage (priority order)
             var viewLoaded = loadFromViewLink();
             if (!viewLoaded) {
+                // If this tab had a view session but hash is gone (page refresh), show expired screen
+                if (sessionStorage.getItem('mappoints_view_session') === '1') {
+                    showViewExpiredScreen();
+                    return;
+                }
                 var sharedLoaded = loadFromShareLink();
                 if (sharedLoaded) {
                     showBackupStatus('Загружено из ссылки', 'success');

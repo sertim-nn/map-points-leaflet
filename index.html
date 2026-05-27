@@ -418,6 +418,21 @@
         </div>
     </div>
 
+    <!-- View expired screen (shown on refresh after view link) -->
+    <div id="viewExpiredScreen" style="display:none; position:fixed; inset:0; background:#f3f4f6; z-index:9999; align-items:center; justify-content:center;">
+        <div class="view-expired-card">
+            <div class="view-expired-icon">
+                <i class="fas fa-map-location-dot"></i>
+            </div>
+            <div class="view-expired-title">MapPoints</div>
+            <div class="view-expired-msg">Данные карты хранятся в ссылке и не сохраняются при обновлении страницы.</div>
+            <div class="view-expired-hint">Перейдите по исходной ссылке ещё раз, чтобы увидеть карту.</div>
+            <button class="view-expired-btn" onclick="history.back()">
+                <i class="fas fa-arrow-left"></i> Назад
+            </button>
+        </div>
+    </div>
+
     <!-- View mode overlay -->
     <div id="viewModeOverlay" style="display: none; position: fixed; bottom: 20px; left: 20px; z-index: 1000; align-items: center; gap: 8px;">
         <div class="view-mode-badge">
